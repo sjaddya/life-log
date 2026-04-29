@@ -13,11 +13,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.lifelog.ui.theme.LifeLogTheme
 
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.unit.dp
+import androidx.room.RoomDatabase
+
 import androidx.room.Room
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+
 import com.example.lifelog.data.local.AppDatabase
+import com.example.lifelog.data.local.entity.Entry
+import com.example.lifelog.data.local.dao.EntryDao
 
 lateinit var db: AppDatabase
 
@@ -31,48 +40,62 @@ class MainActivity : ComponentActivity() {
             "lifelog-db"
         ).build()
 
-        CoroutineScope(Dispatchers.IO).launch {
-
-            val entry = com.example.lifelog.data.local.entity.Entry(
-                startTime = System.currentTimeMillis(),
-                endTime = System.currentTimeMillis() + 1000,
-                text = "First test entry",
-                status = "completed"
-            )
-
-            db.entryDao().insert(entry)
-
-            val entries = db.entryDao().getAll()
-
-            println("DB_TEST: $entries")
-        }
-
         enableEdgeToEdge()
         setContent {
             LifeLogTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+                MainScreen()
             }
         }
     }
 }
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
+fun saveEntry(text: String) {
+    CoroutineScope(Dispatchers.IO).launch {
+
+        val entry = Entry(
+            startTime = System.currentTimeMillis(),
+            endTime = System.currentTimeMillis(),
+            text = text,
+            status = "completed"
+        )
+
+        db.entryDao().insert(entry)
+    }
 }
 
-@Preview(showBackground = true)
 @Composable
-fun GreetingPreview() {
-    LifeLogTheme {
-        Greeting("Android")
+fun MainScreen() {
+    var text by remember { mutableStateOf("") }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+
+        TextField(
+            value = text,
+            onValueChange = { text = it },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("What did you do?") }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(onClick = {
+            saveEntry(text)
+            text = ""
+        }) {
+            Text("Save")
+        }
+
+        Button(onClick = {
+            CoroutineScope(Dispatchers.IO).launch {
+                val entries = db.entryDao().getAll()
+                android.util.Log.d("DB_LIST", entries.toString())
+            }
+        }) {
+            Text("Show Entries")
+        }
     }
 }
