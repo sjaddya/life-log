@@ -1,6 +1,5 @@
 *.iml
 .gradle
-/local.properties
 /.idea
 /.idea/caches
 /.idea/libraries
@@ -20,3 +19,27 @@ Thumbs.db
 /out/
 *.jks
 *.keystore
+
+# Extra JetBrains project files
+*.ipr
+*.iws
+
+# Android build outputs
+*.apk
+*.aab
+*.ap_
+*.dex
+release/
+
+# Secrets and credentials
+keystore.properties
+secrets.properties
+google-services.json
+
+# AI assistant working files
+CLAUDE.md
+PROJECT_CONTEXT.md
+FINDINGS.md
+PLAN.md
+docs/
+.claude/
