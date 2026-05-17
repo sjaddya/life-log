@@ -9,6 +9,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Build
 import androidx.core.content.ContextCompat
 import com.example.lifelog.MainActivity
@@ -43,7 +45,7 @@ class CheckInReceiver : BroadcastReceiver() {
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle("Time Audit")
             .setContentText("What have you been up to?")
-            .setCategory(Notification.CATEGORY_ALARM)
+            .setCategory(Notification.CATEGORY_REMINDER)
             .setPriority(Notification.PRIORITY_HIGH)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setContentIntent(contentIntent)
@@ -56,6 +58,17 @@ class CheckInReceiver : BroadcastReceiver() {
 
     private fun ensureChannel(notificationManager: NotificationManager) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        // Channel sound/vibration is locked at creation time; delete the old
+        // silent v1 channel so users who installed pre-v2 pick up the audible
+        // config. Idempotent: no-op if the channel doesn't exist.
+        runCatching { notificationManager.deleteNotificationChannel(LEGACY_CHANNEL_ID) }
+
+        if (notificationManager.getNotificationChannel(CHANNEL_ID) != null) return
+
+        val audioAttrs = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
         val channel = NotificationChannel(
             CHANNEL_ID,
             "Check-ins",
@@ -63,6 +76,12 @@ class CheckInReceiver : BroadcastReceiver() {
         ).apply {
             description = "Interval reminders for Time Audit"
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            setSound(
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+                audioAttrs
+            )
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 250, 200, 250)
         }
         notificationManager.createNotificationChannel(channel)
     }
@@ -70,6 +89,7 @@ class CheckInReceiver : BroadcastReceiver() {
     companion object {
         const val ACTION_CHECK_IN = "com.example.lifelog.action.CHECK_IN"
         const val EXTRA_ENTRY_ID = "entry_id"
-        private const val CHANNEL_ID = "time_audit_check_ins"
+        private const val CHANNEL_ID = "time_audit_check_ins_v2"
+        private const val LEGACY_CHANNEL_ID = "time_audit_check_ins"
     }
 }

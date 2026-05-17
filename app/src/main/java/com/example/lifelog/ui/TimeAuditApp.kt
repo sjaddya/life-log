@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -509,7 +511,13 @@ private fun LogEntryScreen(
     var text by remember(entry?.id) { mutableStateOf(entry?.text.orEmpty()) }
 
     Surface(color = AuditColors.Paper, modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize().padding(18.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .imePadding()
+                .navigationBarsPadding()
+                .padding(18.dp)
+        ) {
             Spacer(modifier = Modifier.height(24.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.width(4.dp).height(38.dp).background(AuditColors.Amber))
@@ -531,6 +539,12 @@ private fun LogEntryScreen(
                     .weight(1f),
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 colors = TextFieldDefaults.colors(
+                    focusedTextColor = AuditColors.Ink,
+                    unfocusedTextColor = AuditColors.Ink,
+                    disabledTextColor = AuditColors.Muted,
+                    cursorColor = AuditColors.Ink,
+                    focusedPlaceholderColor = AuditColors.Muted,
+                    unfocusedPlaceholderColor = AuditColors.Muted,
                     focusedContainerColor = AuditColors.Paper,
                     unfocusedContainerColor = AuditColors.Paper,
                     focusedIndicatorColor = Color.Transparent,
@@ -612,7 +626,11 @@ private fun VoiceRecordingScreen(
 
     Surface(color = AuditColors.Ink, modifier = Modifier.fillMaxSize()) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(24.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .imePadding()
+                .navigationBarsPadding()
+                .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(32.dp))

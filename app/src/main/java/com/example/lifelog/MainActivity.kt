@@ -61,7 +61,7 @@ class MainActivity : ComponentActivity() {
                 requestNotificationPermissionIfNeeded()
             }
 
-            LifeLogTheme(dynamicColor = false) {
+            LifeLogTheme(darkTheme = false, dynamicColor = false) {
                 TimeAuditApp(viewModel = viewModel, initialEntryId = entryId)
             }
         }
