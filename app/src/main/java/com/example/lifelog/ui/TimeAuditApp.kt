@@ -70,6 +70,7 @@ import com.example.lifelog.domain.EntryStatus
 import com.example.lifelog.domain.IntervalGenerator
 import com.example.lifelog.domain.SupportedIntervals
 import com.example.lifelog.recording.AudioRecorder
+import com.example.lifelog.recording.AudioStart
 import com.example.lifelog.ui.viewmodel.MainViewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -353,8 +354,10 @@ private fun TimelineScreen(
     onQuickCheckIn: (Entry?) -> Unit
 ) {
     val completion = completionRatio(entries)
-    val candidate = entries.firstOrNull { System.currentTimeMillis() in it.startTime until it.endTime }
-        ?: entries.firstOrNull { it.status == EntryStatus.Pending || it.status == EntryStatus.Missed }
+    val now = System.currentTimeMillis()
+    val candidate = entries
+        .filter { it.endTime <= now && (it.status == EntryStatus.Pending || it.status == EntryStatus.Missed) }
+        .maxByOrNull { it.endTime }
 
     LazyColumn(
         modifier = Modifier
@@ -458,15 +461,19 @@ private fun CheckInPrompt(
                     modifier = Modifier.padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("Check-in", color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp)
+                    Text("Just finished", color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp)
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = entry?.let { IntervalGenerator.formatClock(it.startTime) } ?: "--:--",
+                        text = entry?.let {
+                            "${IntervalGenerator.formatClock(it.startTime)} – ${IntervalGenerator.formatClock(it.endTime)}"
+                        } ?: "--:--",
                         color = AuditColors.Paper,
                         fontFamily = FontFamily.Serif,
-                        fontSize = 58.sp
+                        fontSize = 36.sp,
+                        lineHeight = 40.sp
                     )
-                    Text("What have you been up to?", color = AuditColors.Paper, fontSize = 18.sp)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text("What did you do in this block?", color = AuditColors.Paper, fontSize = 18.sp)
                     Spacer(modifier = Modifier.height(28.dp))
                     Button(
                         onClick = onLogNow,
@@ -564,13 +571,24 @@ private fun VoiceRecordingScreen(
     var elapsedSeconds by remember { mutableLongStateOf(0L) }
     var outputPath by remember { mutableStateOf<String?>(null) }
     var samples by remember { mutableStateOf(List(28) { 0.12f }) }
+    var errorText by remember { mutableStateOf<String?>(null) }
 
     fun startRecording() {
         val selected = entry ?: return
-        outputPath = recorder.start(selected.id)
-        startedAt = System.currentTimeMillis()
-        elapsedSeconds = 0L
-        isRecording = true
+        when (val result = recorder.start(selected.id)) {
+            is AudioStart.Success -> {
+                outputPath = result.path
+                startedAt = System.currentTimeMillis()
+                elapsedSeconds = 0L
+                isRecording = true
+                errorText = null
+            }
+            is AudioStart.Failure -> {
+                outputPath = null
+                isRecording = false
+                errorText = "Recording failed: ${result.reason}"
+            }
+        }
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -613,6 +631,10 @@ private fun VoiceRecordingScreen(
                 fontFamily = FontFamily.Monospace,
                 fontSize = 42.sp
             )
+            errorText?.let {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(it, color = AuditColors.Red, fontSize = 13.sp)
+            }
             Spacer(modifier = Modifier.height(28.dp))
             Box(
                 modifier = Modifier

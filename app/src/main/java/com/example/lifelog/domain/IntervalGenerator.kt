@@ -11,7 +11,11 @@ object IntervalGenerator {
 
     fun todayKey(): String = LocalDate.now(zone).toString()
 
-    fun generateForDate(settings: DaySettings, date: LocalDate = LocalDate.now(zone)): List<Entry> {
+    fun generateForDate(
+        settings: DaySettings,
+        date: LocalDate = LocalDate.now(zone),
+        targetZone: ZoneId = zone
+    ): List<Entry> {
         val interval = settings.intervalMinutes.coerceAtLeast(1)
         val startMinute = settings.wakeMinutes.coerceIn(0, 24 * 60 - 1)
         val endMinute = settings.endMinutes.coerceIn(startMinute + interval, 24 * 60)
@@ -22,16 +26,31 @@ object IntervalGenerator {
 
         while (cursor < endMinute) {
             val next = (cursor + interval).coerceAtMost(endMinute)
-            val startMillis = date.atMinuteOfDay(cursor).toMillis()
-            val endMillis = date.atMinuteOfDay(next).toMillis()
-            entries += Entry(
-                id = "$dateKey-$startMillis-$endMillis",
-                date = dateKey,
-                startTime = startMillis,
-                endTime = endMillis,
-                status = EntryStatus.Pending,
-                createdAt = createdAt
-            )
+            val startLdt = date.atMinuteOfDay(cursor)
+            val endLdt = date.atMinuteOfDay(next)
+
+            // Skip slots whose start wall-clock lies in a DST gap; they don't exist.
+            val startInstants = resolveInstants(startLdt, targetZone)
+            if (startInstants.isEmpty()) {
+                cursor = next
+                continue
+            }
+            val startMillis = startInstants.min()
+
+            val endInstants = resolveInstants(endLdt, targetZone)
+            val endMillis = endInstants.firstOrNull { it > startMillis }
+                ?: nextValidInstantAfter(endLdt, targetZone)
+
+            if (endMillis > startMillis) {
+                entries += Entry(
+                    id = "$dateKey-$startMillis-$endMillis",
+                    date = dateKey,
+                    startTime = startMillis,
+                    endTime = endMillis,
+                    status = EntryStatus.Pending,
+                    createdAt = createdAt
+                )
+            }
             cursor = next
         }
 
@@ -52,6 +71,18 @@ object IntervalGenerator {
 
     fun formatMinutes(minutes: Int): String = "%02d:%02d".format(minutes / 60, minutes % 60)
 
+    private fun resolveInstants(ldt: LocalDateTime, zone: ZoneId): List<Long> =
+        zone.rules.getValidOffsets(ldt).map { ldt.atOffset(it).toInstant().toEpochMilli() }
+
+    private fun nextValidInstantAfter(ldt: LocalDateTime, zone: ZoneId): Long {
+        val transition = zone.rules.getTransition(ldt)
+        return if (transition != null) {
+            transition.dateTimeAfter.atZone(zone).toInstant().toEpochMilli()
+        } else {
+            ldt.atZone(zone).toInstant().toEpochMilli()
+        }
+    }
+
     private fun LocalDate.atMinuteOfDay(minutes: Int): LocalDateTime {
         val safeMinutes = minutes.coerceIn(0, 24 * 60)
         return if (safeMinutes == 24 * 60) {
@@ -60,6 +91,4 @@ object IntervalGenerator {
             atTime(safeMinutes / 60, safeMinutes % 60)
         }
     }
-
-    private fun LocalDateTime.toMillis(): Long = atZone(zone).toInstant().toEpochMilli()
 }

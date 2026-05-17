@@ -17,14 +17,19 @@ class CheckInScheduler(private val context: Context) {
     fun scheduleToday(entries: List<Entry>) {
         if (!canScheduleExactAlarms()) return
 
+        val now = System.currentTimeMillis()
         entries
-            .filter { it.startTime > System.currentTimeMillis() }
+            .filter { it.endTime > now }
             .forEach { entry ->
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    entry.startTime,
-                    pendingIntent(entry.id)
-                )
+                // Exact-alarm permission can be revoked between canScheduleExactAlarms()
+                // and this call; swallow so one bad slot doesn't crash the activity.
+                runCatching {
+                    alarmManager.setExactAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        entry.endTime,
+                        pendingIntent(entry.id)
+                    )
+                }
             }
     }
 
