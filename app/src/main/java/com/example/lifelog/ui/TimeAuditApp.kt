@@ -49,7 +49,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -77,6 +79,7 @@ import com.example.lifelog.ui.viewmodel.MainViewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 
 private enum class Destination { Setup, Timeline, Stats, Settings, Prompt, TextEntry, VoiceEntry }
 
@@ -101,6 +104,7 @@ fun TimeAuditApp(
 ) {
     val state by viewModel.state.collectAsState()
     var destination by remember { mutableStateOf(Destination.Setup) }
+    var consumedDeepLinkId by rememberSaveable { mutableStateOf<String?>(null) }
 
     LaunchedEffect(state.settings.setupComplete) {
         if (!state.settings.setupComplete) {
@@ -110,11 +114,18 @@ fun TimeAuditApp(
         }
     }
 
-    LaunchedEffect(initialEntryId, state.entries) {
-        if (initialEntryId != null && state.entries.isNotEmpty() && state.activeEntry?.id != initialEntryId) {
-            viewModel.selectEntry(initialEntryId)
-            destination = Destination.Prompt
-        }
+    // One-shot deep-link consumption: route to Prompt for the notification's
+    // entry once, then mark consumed so saves / config changes / re-emissions
+    // of state.entries do not re-route the user.
+    LaunchedEffect(initialEntryId) {
+        val id = initialEntryId ?: return@LaunchedEffect
+        if (id == consumedDeepLinkId) return@LaunchedEffect
+        // Wait for today's entries to load (cold-start from notification can
+        // race ensureTodayExists()).
+        snapshotFlow { state.entries }.first { it.isNotEmpty() }
+        viewModel.selectEntry(id)
+        destination = Destination.Prompt
+        consumedDeepLinkId = id
     }
 
     when (destination) {

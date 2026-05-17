@@ -19,6 +19,7 @@ import androidx.room.Room
 import com.example.lifelog.data.SettingsRepository
 import com.example.lifelog.data.TimeAuditRepository
 import com.example.lifelog.data.local.AppDatabase
+import com.example.lifelog.data.local.MIGRATION_2_3
 import com.example.lifelog.notifications.CheckInReceiver
 import com.example.lifelog.notifications.CheckInScheduler
 import com.example.lifelog.ui.TimeAuditApp
@@ -38,14 +39,20 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        activeEntryId.value = intent.checkInEntryId()
+        val initialId = intent.checkInEntryId()
+        activeEntryId.value = initialId
+        if (initialId != null) {
+            // Neuter the held intent so future getIntent() reads (e.g. on
+            // rotation) don't resurrect the deep link and re-route into Prompt.
+            setIntent(Intent(this, MainActivity::class.java))
+        }
 
         val db = Room.databaseBuilder(
             applicationContext,
             AppDatabase::class.java,
             "lifelog-db"
         )
-            .fallbackToDestructiveMigration()
+            .addMigrations(MIGRATION_2_3)
             .build()
 
         val settingsRepository = SettingsRepository(applicationContext)
@@ -69,8 +76,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        setIntent(intent)
-        activeEntryId.value = intent.checkInEntryId()
+        val id = intent.checkInEntryId()
+        activeEntryId.value = id
+        if (id != null) {
+            // Neuter so rotation doesn't re-trigger the deep link.
+            setIntent(Intent(this, MainActivity::class.java))
+        } else {
+            setIntent(intent)
+        }
     }
 
     private fun requestNotificationPermissionIfNeeded() {
