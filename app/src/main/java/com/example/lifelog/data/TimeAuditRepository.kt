@@ -38,20 +38,25 @@ class TimeAuditRepository(
     suspend fun saveText(entryId: String, text: String) {
         val entry = getEntry(entryId) ?: return
         val status = if (entry.status == EntryStatus.Pending) EntryStatus.Completed else EntryStatus.Backfilled
+        val previousAudio = entry.audioPath
         db.entryDao().update(
             entry.copy(
                 text = text.trim(),
+                audioPath = null,
                 status = status,
                 source = EntrySource.Manual,
                 filledAt = System.currentTimeMillis(),
                 isEdited = entry.filledAt != null
             )
         )
+        // Converting an entry to text discards any recording it used to carry.
+        if (previousAudio != null) deleteAudioFile(previousAudio)
     }
 
     suspend fun attachAudio(entryId: String, audioPath: String) {
         val entry = getEntry(entryId) ?: return
         val status = if (entry.status == EntryStatus.Pending) EntryStatus.Completed else EntryStatus.Backfilled
+        val previousAudio = entry.audioPath
         db.entryDao().update(
             entry.copy(
                 audioPath = audioPath,
@@ -61,6 +66,12 @@ class TimeAuditRepository(
                 isEdited = entry.filledAt != null
             )
         )
+        // A re-record supersedes the previous file — delete the orphan.
+        if (previousAudio != null && previousAudio != audioPath) deleteAudioFile(previousAudio)
+    }
+
+    private fun deleteAudioFile(path: String) {
+        runCatching { java.io.File(path).delete() }
     }
 
     suspend fun skip(entryId: String) {
@@ -81,7 +92,7 @@ class TimeAuditRepository(
         db.entryDao().insertAll(IntervalGenerator.generateForDate(settings))
     }
 
-    private suspend fun markPastPendingMissed() {
+    suspend fun markPastPendingMissed() {
         db.entryDao().updateStatusBefore(
             date = IntervalGenerator.todayKey(),
             oldStatus = EntryStatus.Pending,

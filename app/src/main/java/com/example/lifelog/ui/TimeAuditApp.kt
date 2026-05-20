@@ -1,6 +1,7 @@
 package com.example.lifelog.ui
 
 import android.Manifest
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -31,6 +32,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -70,6 +72,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.lifelog.data.local.entity.Entry
 import com.example.lifelog.domain.DaySettings
@@ -183,6 +186,7 @@ fun TimeAuditApp(
         ) {
             SettingsScreen(
                 settings = state.settings,
+                hasTodayEntries = state.entries.isNotEmpty(),
                 onSave = { wake, end, interval ->
                     viewModel.saveSetup(wake, end, interval)
                 }
@@ -610,6 +614,7 @@ private fun VoiceRecordingScreen(
     var outputPath by remember { mutableStateOf<String?>(null) }
     var samples by remember { mutableStateOf(List(28) { 0.12f }) }
     var errorText by remember { mutableStateOf<String?>(null) }
+    var micBlocked by remember { mutableStateOf(false) }
 
     fun startRecording() {
         val selected = entry ?: return
@@ -630,7 +635,23 @@ private fun VoiceRecordingScreen(
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) startRecording()
+        if (granted) {
+            micBlocked = false
+            errorText = null
+            startRecording()
+        } else {
+            // If the system will no longer show the rationale dialog, the
+            // permission is effectively blocked — point the user at settings.
+            val activity = context as? Activity
+            val canAskAgain = activity != null && ActivityCompat
+                .shouldShowRequestPermissionRationale(activity, Manifest.permission.RECORD_AUDIO)
+            micBlocked = !canAskAgain
+            errorText = if (canAskAgain) {
+                "Microphone access is needed to record. Tap Mic to allow it."
+            } else {
+                "Microphone access is blocked for LifeLog. Enable it in Android settings."
+            }
+        }
     }
 
     LaunchedEffect(isRecording) {
@@ -676,6 +697,18 @@ private fun VoiceRecordingScreen(
             errorText?.let {
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(it, color = AuditColors.Red, fontSize = 13.sp)
+            }
+            if (micBlocked) {
+                TextButton(onClick = {
+                    runCatching {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                Uri.parse("package:${context.packageName}")
+                            )
+                        )
+                    }
+                }) { Text("Open settings", color = AuditColors.Amber) }
             }
             Spacer(modifier = Modifier.height(28.dp))
             Box(
@@ -832,11 +865,41 @@ private fun HourBars(entries: List<Entry>) {
 @Composable
 private fun SettingsScreen(
     settings: DaySettings,
+    hasTodayEntries: Boolean,
     onSave: (Int, Int, Int) -> Unit
 ) {
     var wake by remember(settings) { mutableStateOf(settings.wakeMinutes) }
     var end by remember(settings) { mutableStateOf(settings.endMinutes) }
     var interval by remember(settings) { mutableStateOf(settings.intervalMinutes) }
+    var showTomorrowDialog by remember { mutableStateOf(false) }
+
+    val scheduleChanged = wake != settings.wakeMinutes ||
+        end != settings.endMinutes ||
+        interval != settings.intervalMinutes
+
+    if (showTomorrowDialog) {
+        AlertDialog(
+            onDismissRequest = { showTomorrowDialog = false },
+            title = { Text("Takes effect tomorrow") },
+            text = {
+                Text(
+                    "Today's check-ins keep their current schedule. " +
+                        "Your new wake / end / interval applies from tomorrow."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showTomorrowDialog = false
+                    onSave(wake, end, interval)
+                }) { Text("Save", color = AuditColors.Amber) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTomorrowDialog = false }) {
+                    Text("Cancel", color = AuditColors.Muted)
+                }
+            }
+        )
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(20.dp),
@@ -868,7 +931,13 @@ private fun SettingsScreen(
             }
             Spacer(modifier = Modifier.height(16.dp))
             Button(
-                onClick = { onSave(wake, end, interval) },
+                onClick = {
+                    if (hasTodayEntries && scheduleChanged) {
+                        showTomorrowDialog = true
+                    } else {
+                        onSave(wake, end, interval)
+                    }
+                },
                 colors = ButtonDefaults.buttonColors(containerColor = AuditColors.Amber),
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.fillMaxWidth()

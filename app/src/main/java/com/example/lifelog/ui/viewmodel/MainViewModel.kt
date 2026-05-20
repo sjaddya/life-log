@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -46,6 +47,15 @@ class MainViewModel(
             scheduler.scheduleToday(repository.todayEntriesOnce())
             scheduler.scheduleNextRollover()
         }
+        // Sweep past-due pending slots to "missed" while the app is open, so
+        // status doesn't go stale until the next launch. No-op when nothing
+        // is overdue.
+        viewModelScope.launch {
+            while (true) {
+                delay(MISSED_SWEEP_INTERVAL_MS)
+                repository.markPastPendingMissed()
+            }
+        }
     }
 
     fun refreshSystemState(notificationGranted: Boolean, exactAlarmAvailable: Boolean) {
@@ -68,6 +78,7 @@ class MainViewModel(
     fun saveText(entryId: String, text: String, afterSave: () -> Unit = {}) {
         viewModelScope.launch {
             repository.saveText(entryId, text)
+            scheduler.dismiss(entryId)
             afterSave()
         }
     }
@@ -75,6 +86,7 @@ class MainViewModel(
     fun attachAudio(entryId: String, audioPath: String, afterSave: () -> Unit = {}) {
         viewModelScope.launch {
             repository.attachAudio(entryId, audioPath)
+            scheduler.dismiss(entryId)
             afterSave()
         }
     }
@@ -82,6 +94,7 @@ class MainViewModel(
     fun skip(entryId: String, afterSave: () -> Unit = {}) {
         viewModelScope.launch {
             repository.skip(entryId)
+            scheduler.dismiss(entryId)
             afterSave()
         }
     }
@@ -89,7 +102,12 @@ class MainViewModel(
     fun remindLater(entryId: String, afterSave: () -> Unit = {}) {
         viewModelScope.launch {
             repository.remindLater(entryId)
+            scheduler.scheduleSnooze(entryId)
             afterSave()
         }
+    }
+
+    companion object {
+        private const val MISSED_SWEEP_INTERVAL_MS = 60_000L
     }
 }
