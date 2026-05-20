@@ -144,10 +144,15 @@ fun TimeAuditApp(
         if (id == consumedDeepLinkId) return@LaunchedEffect
         // Wait for today's entries to load (cold-start from notification can
         // race ensureTodayExists()).
-        snapshotFlow { state.entries }.first { it.isNotEmpty() }
-        viewModel.selectEntry(id)
-        destination = Destination.Prompt
+        val loaded = snapshotFlow { state.entries }.first { it.isNotEmpty() }
         consumedDeepLinkId = id
+        // Only route if the id is a real entry. The activity is exported, so
+        // any app can fire ACTION_CHECK_IN with an arbitrary extra — an id that
+        // matches no entry is ignored rather than opening a blank Prompt.
+        if (loaded.any { it.id == id }) {
+            viewModel.selectEntry(id)
+            destination = Destination.Prompt
+        }
     }
 
     when (destination) {
@@ -1132,12 +1137,12 @@ private fun Chip(text: String, background: Color, foreground: Color) {
     }
 }
 
-private fun statusColor(status: String): Color = when (status) {
+private fun statusColor(status: EntryStatus): Color = when (status) {
     EntryStatus.Completed -> AuditColors.Green
     EntryStatus.Backfilled -> AuditColors.GreenSoft
     EntryStatus.Skipped -> AuditColors.Blue
     EntryStatus.Missed -> AuditColors.Red
-    else -> AuditColors.Border
+    EntryStatus.Pending -> AuditColors.Border
 }
 
 private fun completionRatio(entries: List<Entry>): Float {

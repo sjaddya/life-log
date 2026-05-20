@@ -1,6 +1,7 @@
 package com.example.lifelog.data.local.dao
 
 import com.example.lifelog.data.local.entity.Entry
+import com.example.lifelog.domain.EntryStatus
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
@@ -33,11 +34,11 @@ interface EntryDao {
     suspend fun getById(id: String): Entry?
 
     @Query("SELECT * FROM Entry WHERE date = :date AND status = :status ORDER BY startTime ASC")
-    suspend fun entriesByStatus(date: String, status: String): List<Entry>
+    suspend fun entriesByStatus(date: String, status: EntryStatus): List<Entry>
 
     @Query("SELECT * FROM Entry WHERE audioPath IS NOT NULL")
     suspend fun entriesWithAudio(): List<Entry>
 
     @Query("UPDATE Entry SET status = :newStatus WHERE date = :date AND status = :oldStatus AND endTime < :before")
-    suspend fun updateStatusBefore(date: String, oldStatus: String, newStatus: String, before: Long)
+    suspend fun updateStatusBefore(date: String, oldStatus: EntryStatus, newStatus: EntryStatus, before: Long)
 }

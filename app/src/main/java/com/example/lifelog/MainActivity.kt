@@ -11,11 +11,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
@@ -35,8 +38,25 @@ class MainActivity : ComponentActivity() {
     // Bumped on every non-deep-link (re)launch so the Compose layer can reset a
     // stale destination (e.g. a leftover Prompt screen) back to Timeline.
     private val launchToken = mutableIntStateOf(0)
-    private lateinit var viewModel: MainViewModel
-    private lateinit var scheduler: CheckInScheduler
+
+    private val repository: TimeAuditRepository by lazy {
+        TimeAuditRepository(
+            AppDatabase.getInstance(applicationContext),
+            SettingsRepository(applicationContext)
+        )
+    }
+    private val scheduler: CheckInScheduler by lazy { CheckInScheduler(applicationContext) }
+
+    // Held by the activity's ViewModelStore, so it survives configuration
+    // changes — init (ensureTodayExists, scheduling, the missed-sweep ticker)
+    // runs once per process, not once per rotation.
+    private val viewModel: MainViewModel by viewModels {
+        object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T =
+                MainViewModel(repository, scheduler) as T
+        }
+    }
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -53,13 +73,6 @@ class MainActivity : ComponentActivity() {
             // rotation) don't resurrect the deep link and re-route into Prompt.
             setIntent(Intent(this, MainActivity::class.java))
         }
-
-        val db = AppDatabase.getInstance(applicationContext)
-
-        val settingsRepository = SettingsRepository(applicationContext)
-        val repository = TimeAuditRepository(db, settingsRepository)
-        scheduler = CheckInScheduler(applicationContext)
-        viewModel = MainViewModel(repository, scheduler)
 
         // Daily cleanup of voice recordings past the retention window.
         WorkManager.getInstance(applicationContext).enqueueUniquePeriodicWork(
