@@ -6,7 +6,11 @@ import com.example.lifelog.domain.DaySettings
 import com.example.lifelog.domain.EntrySource
 import com.example.lifelog.domain.EntryStatus
 import com.example.lifelog.domain.IntervalGenerator
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 
 class TimeAuditRepository(
     private val db: AppDatabase,
@@ -14,7 +18,24 @@ class TimeAuditRepository(
 ) {
     val settings = settingsRepository.settings
 
-    fun todayEntries(): Flow<List<Entry>> = db.entryDao().entriesForDate(IntervalGenerator.todayKey())
+    // Re-queries when the calendar day rolls over, so an app left open past
+    // midnight switches to the new day instead of showing yesterday forever.
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun todayEntries(): Flow<List<Entry>> =
+        todayKeyFlow().flatMapLatest { dateKey -> db.entryDao().entriesForDate(dateKey) }
+
+    private fun todayKeyFlow(): Flow<String> = flow {
+        var current = IntervalGenerator.todayKey()
+        emit(current)
+        while (true) {
+            delay(DATE_CHECK_INTERVAL_MS)
+            val next = IntervalGenerator.todayKey()
+            if (next != current) {
+                current = next
+                emit(next)
+            }
+        }
+    }
 
     suspend fun todayEntriesOnce(): List<Entry> =
         db.entryDao().entriesForDateOnce(IntervalGenerator.todayKey())
@@ -107,5 +128,9 @@ class TimeAuditRepository(
             newStatus = EntryStatus.Missed,
             before = System.currentTimeMillis()
         )
+    }
+
+    companion object {
+        private const val DATE_CHECK_INTERVAL_MS = 60_000L
     }
 }

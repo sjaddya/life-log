@@ -7,14 +7,16 @@ import java.time.LocalTime
 import java.time.ZoneId
 
 object IntervalGenerator {
-    private val zone: ZoneId = ZoneId.systemDefault()
+    // Resolved on every call rather than cached, so a mid-session timezone
+    // change (travel) is reflected immediately.
+    private fun zone(): ZoneId = ZoneId.systemDefault()
 
-    fun todayKey(): String = LocalDate.now(zone).toString()
+    fun todayKey(): String = LocalDate.now(zone()).toString()
 
     fun generateForDate(
         settings: DaySettings,
-        date: LocalDate = LocalDate.now(zone),
-        targetZone: ZoneId = zone
+        date: LocalDate = LocalDate.now(zone()),
+        targetZone: ZoneId = zone()
     ): List<Entry> {
         val interval = settings.intervalMinutes.coerceAtLeast(1)
         val startMinute = settings.wakeMinutes.coerceIn(0, 24 * 60 - 1)
@@ -58,7 +60,7 @@ object IntervalGenerator {
     }
 
     fun formatClock(millis: Long): String {
-        val time = LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(millis), zone).toLocalTime()
+        val time = LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(millis), zone()).toLocalTime()
         val hour = time.hour
         val minute = time.minute
         val suffix = if (hour >= 12) "PM" else "AM"
