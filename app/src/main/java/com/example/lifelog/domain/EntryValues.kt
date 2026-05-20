@@ -13,4 +13,4 @@ object EntrySource {
     const val VoiceRecording = "voice_recording"
 }
 
-val SupportedIntervals = listOf(15, 30, 60, 120)
+val SupportedIntervals = listOf(15, 30, 45, 60, 120)

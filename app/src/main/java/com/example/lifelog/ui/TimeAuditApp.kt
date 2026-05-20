@@ -102,6 +102,9 @@ private object AuditColors {
     val Teal = Color(0xFF1D9E75)
     val Purple = Color(0xFF7F77DD)
     val Gray = Color(0xFF888780)
+    val Green = Color(0xFF1F8A52)      // filled on time
+    val GreenSoft = Color(0xFF7CC59A)  // backfilled — related but distinct
+    val Blue = Color(0xFF3A7BD5)       // skipped — clearly not a green
 }
 
 @Composable
@@ -160,6 +163,7 @@ fun TimeAuditApp(
         ) {
             TimelineScreen(
                 entries = state.entries,
+                fillOldestFirst = state.settings.fillOldestFirst,
                 onEntryClick = {
                     viewModel.selectEntry(it.id)
                     destination = Destination.TextEntry
@@ -177,7 +181,7 @@ fun TimeAuditApp(
             selected = Destination.Stats,
             onNavigate = { destination = it }
         ) {
-            StatsScreen(entries = state.entries)
+            StatsScreen(entries = state.entries, settings = state.settings)
         }
 
         Destination.Settings -> Shell(
@@ -189,7 +193,8 @@ fun TimeAuditApp(
                 hasTodayEntries = state.entries.isNotEmpty(),
                 onSave = { wake, end, interval ->
                     viewModel.saveSetup(wake, end, interval)
-                }
+                },
+                onFillOrderChange = { viewModel.setFillOrder(it) }
             )
         }
 
@@ -380,14 +385,19 @@ private fun IntervalSelector(selected: Int, onSelect: (Int) -> Unit) {
 @Composable
 private fun TimelineScreen(
     entries: List<Entry>,
+    fillOldestFirst: Boolean,
     onEntryClick: (Entry) -> Unit,
     onQuickCheckIn: (Entry?) -> Unit
 ) {
     val completion = completionRatio(entries)
     val now = System.currentTimeMillis()
-    val candidate = entries
+    val unfilledPast = entries
         .filter { it.endTime <= now && (it.status == EntryStatus.Pending || it.status == EntryStatus.Missed) }
-        .maxByOrNull { it.endTime }
+    val candidate = if (fillOldestFirst) {
+        unfilledPast.minByOrNull { it.endTime }
+    } else {
+        unfilledPast.maxByOrNull { it.endTime }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -769,13 +779,15 @@ private fun Waveform(samples: List<Float>) {
 }
 
 @Composable
-private fun StatsScreen(entries: List<Entry>) {
+private fun StatsScreen(entries: List<Entry>, settings: DaySettings) {
     val completed = entries.count { it.status == EntryStatus.Completed || it.status == EntryStatus.Backfilled }
     val missed = entries.count { it.status == EntryStatus.Missed }
     val skipped = entries.count { it.status == EntryStatus.Skipped }
     val backfilled = entries.count { it.status == EntryStatus.Backfilled }
     val voice = entries.count { it.source == EntrySource.VoiceRecording }
     val ratio = completionRatio(entries)
+    val now = System.currentTimeMillis()
+    val due = entries.count { it.endTime <= now }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(20.dp),
@@ -786,24 +798,28 @@ private fun StatsScreen(entries: List<Entry>) {
             Text("Today", fontFamily = FontFamily.Serif, fontSize = 38.sp, color = AuditColors.Ink)
             Spacer(modifier = Modifier.height(18.dp))
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                CompletionRing(ratio = ratio, centerText = "$completed/${entries.size}")
+                CompletionRing(ratio = ratio, centerText = "$completed/$due")
             }
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 MetricCard("Missed", "$missed", AuditColors.Red, Modifier.weight(1f))
-                MetricCard("Backfilled", "$backfilled", AuditColors.Teal, Modifier.weight(1f))
+                MetricCard("Backfilled", "$backfilled", AuditColors.GreenSoft, Modifier.weight(1f))
             }
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 MetricCard("Voice entries", "$voice", AuditColors.Purple, Modifier.weight(1f))
-                MetricCard("Skipped", "$skipped", AuditColors.Gray, Modifier.weight(1f))
+                MetricCard("Skipped", "$skipped", AuditColors.Blue, Modifier.weight(1f))
             }
         }
         item {
-            Text("Activity density", color = AuditColors.Muted, fontSize = 13.sp)
-            HourBars(entries = entries)
+            Text("Entries filled by hour", color = AuditColors.Muted, fontSize = 13.sp)
+            HourBars(
+                entries = entries,
+                startHour = settings.wakeMinutes / 60,
+                endHour = ((settings.endMinutes - 1) / 60).coerceIn(0, 23)
+            )
         }
     }
 }
@@ -838,25 +854,35 @@ private fun MetricCard(label: String, value: String, color: Color, modifier: Mod
 }
 
 @Composable
-private fun HourBars(entries: List<Entry>) {
+private fun HourBars(entries: List<Entry>, startHour: Int, endHour: Int) {
     val buckets = entries
         .filter { it.status == EntryStatus.Completed || it.status == EntryStatus.Backfilled }
         .groupBy { java.time.Instant.ofEpochMilli(it.startTime).atZone(java.time.ZoneId.systemDefault()).hour }
-    val max = buckets.values.maxOfOrNull { it.size }?.coerceAtLeast(1) ?: 1
 
+    if (buckets.isEmpty()) {
+        Text(
+            "No entries logged yet today.",
+            color = AuditColors.Gray,
+            fontSize = 13.sp,
+            modifier = Modifier.padding(top = 10.dp)
+        )
+        return
+    }
+
+    val max = buckets.values.maxOfOrNull { it.size }?.coerceAtLeast(1) ?: 1
     Row(
         modifier = Modifier.fillMaxWidth().height(132.dp).padding(top = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.Bottom
     ) {
-        (7..23).forEach { hour ->
+        (startHour..endHour.coerceAtLeast(startHour)).forEach { hour ->
             val height = 18 + ((buckets[hour]?.size ?: 0).toFloat() / max * 96)
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .height(height.dp)
                     .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                    .background(AuditColors.Amber.copy(alpha = 0.45f))
+                    .background(AuditColors.Green.copy(alpha = 0.45f))
             )
         }
     }
@@ -866,7 +892,8 @@ private fun HourBars(entries: List<Entry>) {
 private fun SettingsScreen(
     settings: DaySettings,
     hasTodayEntries: Boolean,
-    onSave: (Int, Int, Int) -> Unit
+    onSave: (Int, Int, Int) -> Unit,
+    onFillOrderChange: (Boolean) -> Unit
 ) {
     var wake by remember(settings) { mutableStateOf(settings.wakeMinutes) }
     var end by remember(settings) { mutableStateOf(settings.endMinutes) }
@@ -942,6 +969,28 @@ private fun SettingsScreen(
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Save schedule") }
+        }
+        item {
+            Text(
+                "When several past slots are unfilled, \"Open current check-in\" goes to",
+                color = AuditColors.Muted,
+                fontSize = 13.sp,
+                lineHeight = 17.sp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(true to "Oldest first", false to "Newest first").forEach { (oldestFirst, label) ->
+                    val selected = settings.fillOldestFirst == oldestFirst
+                    Button(
+                        onClick = { onFillOrderChange(oldestFirst) },
+                        shape = RoundedCornerShape(22.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (selected) AuditColors.Amber else AuditColors.PaperAlt,
+                            contentColor = if (selected) AuditColors.Paper else AuditColors.Ink
+                        )
+                    ) { Text(label) }
+                }
+            }
         }
         item {
             val context = LocalContext.current
@@ -1026,15 +1075,21 @@ private fun Chip(text: String, background: Color, foreground: Color) {
 }
 
 private fun statusColor(status: String): Color = when (status) {
-    EntryStatus.Completed -> AuditColors.Amber
-    EntryStatus.Backfilled -> AuditColors.Teal
+    EntryStatus.Completed -> AuditColors.Green
+    EntryStatus.Backfilled -> AuditColors.GreenSoft
+    EntryStatus.Skipped -> AuditColors.Blue
     EntryStatus.Missed -> AuditColors.Red
-    EntryStatus.Skipped -> AuditColors.Gray
     else -> AuditColors.Border
 }
 
 private fun completionRatio(entries: List<Entry>): Float {
-    if (entries.isEmpty()) return 0f
-    val complete = entries.count { it.status == EntryStatus.Completed || it.status == EntryStatus.Backfilled }
-    return complete.toFloat() / entries.size
+    // Only slots whose time has actually passed count as "due" — future slots
+    // haven't been asked yet, so they shouldn't drag the ratio down.
+    val now = System.currentTimeMillis()
+    val due = entries.count { it.endTime <= now }
+    if (due == 0) return 0f
+    val complete = entries.count {
+        it.endTime <= now && (it.status == EntryStatus.Completed || it.status == EntryStatus.Backfilled)
+    }
+    return (complete.toFloat() / due).coerceIn(0f, 1f)
 }

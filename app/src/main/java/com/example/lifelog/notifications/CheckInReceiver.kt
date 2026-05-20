@@ -42,7 +42,8 @@ class CheckInReceiver : BroadcastReceiver() {
         )
 
         val notification = Notification.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setColor(0xFFBA7517.toInt())
             .setContentTitle("Time Audit")
             .setContentText("What have you been up to?")
             .setCategory(Notification.CATEGORY_REMINDER)

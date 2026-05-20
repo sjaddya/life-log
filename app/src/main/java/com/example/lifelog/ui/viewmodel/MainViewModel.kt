@@ -62,6 +62,10 @@ class MainViewModel(
         repository.updateSystemState(notificationGranted, exactAlarmAvailable)
     }
 
+    fun setFillOrder(oldestFirst: Boolean) {
+        repository.setFillOrder(oldestFirst)
+    }
+
     fun selectEntry(entryId: String?) {
         activeEntryId.value = entryId
     }

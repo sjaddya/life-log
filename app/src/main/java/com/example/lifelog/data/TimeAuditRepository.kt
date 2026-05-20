@@ -88,6 +88,10 @@ class TimeAuditRepository(
         settingsRepository.updateSystemState(notificationGranted, exactAlarmAvailable)
     }
 
+    fun setFillOrder(oldestFirst: Boolean) {
+        settingsRepository.setFillOrder(oldestFirst)
+    }
+
     private suspend fun generateToday(settings: DaySettings) {
         db.entryDao().insertAll(IntervalGenerator.generateForDate(settings))
     }

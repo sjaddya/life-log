@@ -24,6 +24,11 @@ class SettingsRepository(context: Context) {
         _settings.value = read()
     }
 
+    fun setFillOrder(oldestFirst: Boolean) {
+        prefs.edit().putBoolean(KEY_FILL_OLDEST_FIRST, oldestFirst).apply()
+        _settings.value = read()
+    }
+
     fun updateSystemState(notificationGranted: Boolean, exactAlarmAvailable: Boolean) {
         prefs.edit()
             .putBoolean(KEY_NOTIFICATIONS_GRANTED, notificationGranted)
@@ -39,7 +44,8 @@ class SettingsRepository(context: Context) {
         setupComplete = prefs.getBoolean(KEY_SETUP_COMPLETE, false),
         notificationPermissionGranted = prefs.getBoolean(KEY_NOTIFICATIONS_GRANTED, false),
         exactAlarmAvailable = prefs.getBoolean(KEY_EXACT_ALARM_AVAILABLE, false),
-        audioRetentionDays = prefs.getInt(KEY_AUDIO_RETENTION_DAYS, 7)
+        audioRetentionDays = prefs.getInt(KEY_AUDIO_RETENTION_DAYS, 7),
+        fillOldestFirst = prefs.getBoolean(KEY_FILL_OLDEST_FIRST, true)
     )
 
     companion object {
@@ -50,5 +56,6 @@ class SettingsRepository(context: Context) {
         private const val KEY_NOTIFICATIONS_GRANTED = "notifications_granted"
         private const val KEY_EXACT_ALARM_AVAILABLE = "exact_alarm_available"
         private const val KEY_AUDIO_RETENTION_DAYS = "audio_retention_days"
+        private const val KEY_FILL_OLDEST_FIRST = "fill_oldest_first"
     }
 }
