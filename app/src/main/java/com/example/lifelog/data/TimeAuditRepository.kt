@@ -92,6 +92,10 @@ class TimeAuditRepository(
         settingsRepository.setFillOrder(oldestFirst)
     }
 
+    fun setVacationMode(enabled: Boolean) {
+        settingsRepository.setVacationMode(enabled)
+    }
+
     private suspend fun generateToday(settings: DaySettings) {
         db.entryDao().insertAll(IntervalGenerator.generateForDate(settings))
     }

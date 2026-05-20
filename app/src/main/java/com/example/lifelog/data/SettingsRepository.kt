@@ -29,6 +29,11 @@ class SettingsRepository(context: Context) {
         _settings.value = read()
     }
 
+    fun setVacationMode(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_VACATION_MODE, enabled).apply()
+        _settings.value = read()
+    }
+
     fun updateSystemState(notificationGranted: Boolean, exactAlarmAvailable: Boolean) {
         prefs.edit()
             .putBoolean(KEY_NOTIFICATIONS_GRANTED, notificationGranted)
@@ -45,7 +50,8 @@ class SettingsRepository(context: Context) {
         notificationPermissionGranted = prefs.getBoolean(KEY_NOTIFICATIONS_GRANTED, false),
         exactAlarmAvailable = prefs.getBoolean(KEY_EXACT_ALARM_AVAILABLE, false),
         audioRetentionDays = prefs.getInt(KEY_AUDIO_RETENTION_DAYS, 7),
-        fillOldestFirst = prefs.getBoolean(KEY_FILL_OLDEST_FIRST, true)
+        fillOldestFirst = prefs.getBoolean(KEY_FILL_OLDEST_FIRST, true),
+        vacationMode = prefs.getBoolean(KEY_VACATION_MODE, false)
     )
 
     companion object {
@@ -57,5 +63,6 @@ class SettingsRepository(context: Context) {
         private const val KEY_EXACT_ALARM_AVAILABLE = "exact_alarm_available"
         private const val KEY_AUDIO_RETENTION_DAYS = "audio_retention_days"
         private const val KEY_FILL_OLDEST_FIRST = "fill_oldest_first"
+        private const val KEY_VACATION_MODE = "vacation_mode"
     }
 }

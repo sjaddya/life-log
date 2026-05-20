@@ -50,7 +50,6 @@ class CheckInReceiver : BroadcastReceiver() {
             .setPriority(Notification.PRIORITY_HIGH)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setContentIntent(contentIntent)
-            .setFullScreenIntent(contentIntent, true)
             .setAutoCancel(true)
             .build()
 

@@ -43,6 +43,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -80,6 +82,7 @@ import com.example.lifelog.domain.EntrySource
 import com.example.lifelog.domain.EntryStatus
 import com.example.lifelog.domain.IntervalGenerator
 import com.example.lifelog.domain.SupportedIntervals
+import com.example.lifelog.recording.AudioPlayer
 import com.example.lifelog.recording.AudioRecorder
 import com.example.lifelog.recording.AudioStart
 import com.example.lifelog.ui.viewmodel.MainViewModel
@@ -194,7 +197,8 @@ fun TimeAuditApp(
                 onSave = { wake, end, interval ->
                     viewModel.saveSetup(wake, end, interval)
                 },
-                onFillOrderChange = { viewModel.setFillOrder(it) }
+                onFillOrderChange = { viewModel.setFillOrder(it) },
+                onVacationModeChange = { viewModel.setVacationMode(it) }
             )
         }
 
@@ -567,6 +571,36 @@ private fun LogEntryScreen(
                     fontSize = 25.sp
                 )
             }
+            val audioPath = entry?.audioPath
+            if (audioPath != null) {
+                val player = remember { AudioPlayer() }
+                var playing by remember(entry.id) { mutableStateOf(false) }
+                DisposableEffect(audioPath) { onDispose { player.stop() } }
+                Spacer(modifier = Modifier.height(14.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(AuditColors.PaperAlt)
+                        .clickable {
+                            playing = if (playing) {
+                                player.stop(); false
+                            } else {
+                                player.start(audioPath) { playing = false }
+                            }
+                        }
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (playing) "Stop recording" else "Play recording",
+                        color = AuditColors.Amber,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text("Voice note", color = AuditColors.Gray, fontSize = 12.sp)
+                }
+            }
             Spacer(modifier = Modifier.height(18.dp))
             TextField(
                 value = text,
@@ -893,7 +927,8 @@ private fun SettingsScreen(
     settings: DaySettings,
     hasTodayEntries: Boolean,
     onSave: (Int, Int, Int) -> Unit,
-    onFillOrderChange: (Boolean) -> Unit
+    onFillOrderChange: (Boolean) -> Unit,
+    onVacationModeChange: (Boolean) -> Unit
 ) {
     var wake by remember(settings) { mutableStateOf(settings.wakeMinutes) }
     var end by remember(settings) { mutableStateOf(settings.endMinutes) }
@@ -990,6 +1025,29 @@ private fun SettingsScreen(
                         )
                     ) { Text(label) }
                 }
+            }
+        }
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Vacation mode", color = AuditColors.Ink)
+                    Text(
+                        "Pause all check-in reminders",
+                        color = AuditColors.Muted,
+                        fontSize = 12.sp
+                    )
+                }
+                Switch(
+                    checked = settings.vacationMode,
+                    onCheckedChange = onVacationModeChange,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = AuditColors.Paper,
+                        checkedTrackColor = AuditColors.Amber
+                    )
+                )
             }
         }
         item {

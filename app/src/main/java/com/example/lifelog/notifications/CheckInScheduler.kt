@@ -18,22 +18,27 @@ class CheckInScheduler(private val context: Context) {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
     }
 
-    fun scheduleToday(entries: List<Entry>) {
-        if (!canScheduleExactAlarms()) return
-
+    fun scheduleToday(entries: List<Entry>, vacationMode: Boolean = false) {
         // Cancel alarms armed in the previous pass first, so any id that has
         // dropped out of today's set (regen, DST reshape) leaves no orphan.
         cancelTrackedAlarms()
+
+        // Vacation mode: cancel everything and schedule nothing.
+        if (vacationMode) {
+            prefs.edit().putStringSet(KEY_SCHEDULED_IDS, emptySet()).apply()
+            return
+        }
 
         val now = System.currentTimeMillis()
         val scheduled = mutableSetOf<String>()
         entries
             .filter { it.endTime > now }
             .forEach { entry ->
-                // Exact-alarm permission can be revoked between canScheduleExactAlarms()
-                // and this call; swallow so one bad slot doesn't crash the activity.
+                // Routine reminders use the inexact variant: it doesn't need
+                // the SCHEDULE_EXACT_ALARM permission and breaks Doze far less
+                // often. A few minutes of drift on a 15-min+ cadence is fine.
                 runCatching {
-                    alarmManager.setExactAndAllowWhileIdle(
+                    alarmManager.setAndAllowWhileIdle(
                         AlarmManager.RTC_WAKEUP,
                         entry.endTime,
                         pendingIntent(entry.id)
@@ -71,10 +76,10 @@ class CheckInScheduler(private val context: Context) {
     // Arm a single alarm just after midnight so the next day's entries get
     // generated and scheduled even if the user never opens the app. The
     // receiver re-arms this each time it fires, so the chain is self-perpetuating.
+    // Inexact is fine — even an hour of drift is well before the first wake-time slot.
     fun scheduleNextRollover() {
-        if (!canScheduleExactAlarms()) return
         runCatching {
-            alarmManager.setExactAndAllowWhileIdle(
+            alarmManager.setAndAllowWhileIdle(
                 AlarmManager.RTC_WAKEUP,
                 nextRolloverTimeMillis(),
                 rolloverPendingIntent()

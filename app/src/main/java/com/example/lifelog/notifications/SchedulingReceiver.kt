@@ -23,13 +23,17 @@ class SchedulingReceiver : BroadcastReceiver() {
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                val settingsRepository = SettingsRepository(appContext)
                 val repository = TimeAuditRepository(
                     AppDatabase.getInstance(appContext),
-                    SettingsRepository(appContext)
+                    settingsRepository
                 )
                 val scheduler = CheckInScheduler(appContext)
                 repository.ensureTodayExists()
-                scheduler.scheduleToday(repository.todayEntriesOnce())
+                scheduler.scheduleToday(
+                    repository.todayEntriesOnce(),
+                    settingsRepository.settings.value.vacationMode
+                )
                 scheduler.scheduleNextRollover()
             } finally {
                 pending.finish()

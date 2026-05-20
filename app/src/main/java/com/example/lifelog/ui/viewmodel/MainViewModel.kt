@@ -44,7 +44,10 @@ class MainViewModel(
     init {
         viewModelScope.launch {
             repository.ensureTodayExists()
-            scheduler.scheduleToday(repository.todayEntriesOnce())
+            scheduler.scheduleToday(
+                repository.todayEntriesOnce(),
+                repository.settings.value.vacationMode
+            )
             scheduler.scheduleNextRollover()
         }
         // Sweep past-due pending slots to "missed" while the app is open, so
@@ -73,9 +76,19 @@ class MainViewModel(
     fun saveSetup(wakeMinutes: Int, endMinutes: Int, intervalMinutes: Int, afterSave: () -> Unit = {}) {
         viewModelScope.launch {
             repository.saveSetup(wakeMinutes, endMinutes, intervalMinutes)
-            scheduler.scheduleToday(repository.todayEntriesOnce())
+            scheduler.scheduleToday(
+                repository.todayEntriesOnce(),
+                repository.settings.value.vacationMode
+            )
             scheduler.scheduleNextRollover()
             afterSave()
+        }
+    }
+
+    fun setVacationMode(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.setVacationMode(enabled)
+            scheduler.scheduleToday(repository.todayEntriesOnce(), enabled)
         }
     }
 

@@ -35,6 +35,9 @@ interface EntryDao {
     @Query("SELECT * FROM Entry WHERE date = :date AND status = :status ORDER BY startTime ASC")
     suspend fun entriesByStatus(date: String, status: String): List<Entry>
 
+    @Query("SELECT * FROM Entry WHERE audioPath IS NOT NULL")
+    suspend fun entriesWithAudio(): List<Entry>
+
     @Query("UPDATE Entry SET status = :newStatus WHERE date = :date AND status = :oldStatus AND endTime < :before")
     suspend fun updateStatusBefore(date: String, oldStatus: String, newStatus: String, before: Long)
 }

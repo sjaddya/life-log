@@ -10,5 +10,7 @@ data class DaySettings(
     val audioRetentionDays: Int = 7,
     // When several past slots are unfilled, "Open current check-in" picks the
     // oldest unfilled slot (true) or the most recent one (false).
-    val fillOldestFirst: Boolean = true
+    val fillOldestFirst: Boolean = true,
+    // When on, no check-in alarms are scheduled at all.
+    val vacationMode: Boolean = false
 )

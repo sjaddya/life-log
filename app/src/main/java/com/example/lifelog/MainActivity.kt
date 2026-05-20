@@ -16,14 +16,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.ContextCompat
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import com.example.lifelog.data.SettingsRepository
 import com.example.lifelog.data.TimeAuditRepository
 import com.example.lifelog.data.local.AppDatabase
 import com.example.lifelog.notifications.CheckInReceiver
 import com.example.lifelog.notifications.CheckInScheduler
+import com.example.lifelog.recording.AudioRetentionWorker
 import com.example.lifelog.ui.TimeAuditApp
 import com.example.lifelog.ui.theme.LifeLogTheme
 import com.example.lifelog.ui.viewmodel.MainViewModel
+import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
     private val activeEntryId = mutableStateOf<String?>(null)
@@ -55,6 +60,13 @@ class MainActivity : ComponentActivity() {
         val repository = TimeAuditRepository(db, settingsRepository)
         scheduler = CheckInScheduler(applicationContext)
         viewModel = MainViewModel(repository, scheduler)
+
+        // Daily cleanup of voice recordings past the retention window.
+        WorkManager.getInstance(applicationContext).enqueueUniquePeriodicWork(
+            AudioRetentionWorker.WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            PeriodicWorkRequestBuilder<AudioRetentionWorker>(1, TimeUnit.DAYS).build()
+        )
 
         enableEdgeToEdge()
         setContent {
