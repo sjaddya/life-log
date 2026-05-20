@@ -44,6 +44,7 @@ class MainViewModel(
         viewModelScope.launch {
             repository.ensureTodayExists()
             scheduler.scheduleToday(repository.todayEntriesOnce())
+            scheduler.scheduleNextRollover()
         }
     }
 
@@ -59,6 +60,7 @@ class MainViewModel(
         viewModelScope.launch {
             repository.saveSetup(wakeMinutes, endMinutes, intervalMinutes)
             scheduler.scheduleToday(repository.todayEntriesOnce())
+            scheduler.scheduleNextRollover()
             afterSave()
         }
     }

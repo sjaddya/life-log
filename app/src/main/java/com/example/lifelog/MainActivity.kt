@@ -15,11 +15,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.ContextCompat
-import androidx.room.Room
 import com.example.lifelog.data.SettingsRepository
 import com.example.lifelog.data.TimeAuditRepository
 import com.example.lifelog.data.local.AppDatabase
-import com.example.lifelog.data.local.MIGRATION_2_3
 import com.example.lifelog.notifications.CheckInReceiver
 import com.example.lifelog.notifications.CheckInScheduler
 import com.example.lifelog.ui.TimeAuditApp
@@ -47,13 +45,7 @@ class MainActivity : ComponentActivity() {
             setIntent(Intent(this, MainActivity::class.java))
         }
 
-        val db = Room.databaseBuilder(
-            applicationContext,
-            AppDatabase::class.java,
-            "lifelog-db"
-        )
-            .addMigrations(MIGRATION_2_3)
-            .build()
+        val db = AppDatabase.getInstance(applicationContext)
 
         val settingsRepository = SettingsRepository(applicationContext)
         val repository = TimeAuditRepository(db, settingsRepository)
