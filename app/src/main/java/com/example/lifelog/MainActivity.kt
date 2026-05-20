@@ -13,6 +13,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.ContextCompat
 import com.example.lifelog.data.SettingsRepository
@@ -26,6 +27,9 @@ import com.example.lifelog.ui.viewmodel.MainViewModel
 
 class MainActivity : ComponentActivity() {
     private val activeEntryId = mutableStateOf<String?>(null)
+    // Bumped on every non-deep-link (re)launch so the Compose layer can reset a
+    // stale destination (e.g. a leftover Prompt screen) back to Timeline.
+    private val launchToken = mutableIntStateOf(0)
     private lateinit var viewModel: MainViewModel
     private lateinit var scheduler: CheckInScheduler
 
@@ -55,13 +59,17 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val entryId by activeEntryId
+            val token by launchToken
             LaunchedEffect(Unit) {
-                refreshSystemState()
                 requestNotificationPermissionIfNeeded()
             }
 
             LifeLogTheme(darkTheme = false, dynamicColor = false) {
-                TimeAuditApp(viewModel = viewModel, initialEntryId = entryId)
+                TimeAuditApp(
+                    viewModel = viewModel,
+                    initialEntryId = entryId,
+                    launchToken = token
+                )
             }
         }
     }
@@ -75,7 +83,15 @@ class MainActivity : ComponentActivity() {
             setIntent(Intent(this, MainActivity::class.java))
         } else {
             setIntent(intent)
+            // Plain launcher re-open of the existing activity — signal the
+            // Compose layer to drop any stale Prompt/entry screen.
+            launchToken.intValue++
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshSystemState()
     }
 
     private fun requestNotificationPermissionIfNeeded() {

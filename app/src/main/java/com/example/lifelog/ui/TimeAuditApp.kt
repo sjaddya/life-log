@@ -1,7 +1,11 @@
 package com.example.lifelog.ui
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -100,16 +104,25 @@ private object AuditColors {
 @Composable
 fun TimeAuditApp(
     viewModel: MainViewModel,
-    initialEntryId: String?
+    initialEntryId: String?,
+    launchToken: Int = 0
 ) {
     val state by viewModel.state.collectAsState()
-    var destination by remember { mutableStateOf(Destination.Setup) }
+    var destination by rememberSaveable { mutableStateOf(Destination.Setup) }
     var consumedDeepLinkId by rememberSaveable { mutableStateOf<String?>(null) }
 
     LaunchedEffect(state.settings.setupComplete) {
         if (!state.settings.setupComplete) {
             destination = Destination.Setup
         } else if (destination == Destination.Setup) {
+            destination = Destination.Timeline
+        }
+    }
+
+    // A plain launcher re-open (launchToken bumped by MainActivity) should land
+    // on the Timeline, not a stale Prompt / entry screen left over from before.
+    LaunchedEffect(launchToken) {
+        if (launchToken > 0 && state.settings.setupComplete) {
             destination = Destination.Timeline
         }
     }
@@ -519,7 +532,7 @@ private fun LogEntryScreen(
     onVoice: () -> Unit,
     onCancel: () -> Unit
 ) {
-    var text by remember(entry?.id) { mutableStateOf(entry?.text.orEmpty()) }
+    var text by rememberSaveable(entry?.id) { mutableStateOf(entry?.text.orEmpty()) }
 
     Surface(color = AuditColors.Paper, modifier = Modifier.fillMaxSize()) {
         Column(
@@ -862,10 +875,31 @@ private fun SettingsScreen(
             ) { Text("Save schedule") }
         }
         item {
-            CapabilityRow("Notifications", settings.notificationPermissionGranted)
-            CapabilityRow("Exact alarms", settings.exactAlarmAvailable)
+            val context = LocalContext.current
+            CapabilityRow("Notifications", settings.notificationPermissionGranted) {
+                // Route to the system app-notification screen — always works,
+                // including when the runtime permission is permanently denied.
+                runCatching {
+                    context.startActivity(
+                        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                    )
+                }
+            }
+            CapabilityRow("Exact alarms", settings.exactAlarmAvailable) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    runCatching {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                                Uri.parse("package:${context.packageName}")
+                            )
+                        )
+                    }
+                }
+            }
             Text(
-                text = "If exact alarms are unavailable, timeline logging still works. Enable alarms in Android settings for reliable check-ins.",
+                text = "If exact alarms are unavailable, timeline logging still works. Tap a row above to fix it in Android settings — the status updates when you return.",
                 color = AuditColors.Gray,
                 fontSize = 12.sp,
                 lineHeight = 17.sp
@@ -891,9 +925,21 @@ private fun SettingsStepper(label: String, value: String, onStep: (Int) -> Unit)
 }
 
 @Composable
-private fun CapabilityRow(label: String, active: Boolean) {
-    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, modifier = Modifier.weight(1f), color = AuditColors.Ink)
+private fun CapabilityRow(label: String, active: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label, color = AuditColors.Ink)
+            if (!active) {
+                Text("Tap to fix in Android settings", color = AuditColors.Muted, fontSize = 11.sp)
+            }
+        }
         Chip(if (active) "Available" else "Needs attention", if (active) Color(0xFFE1F5EE) else Color(0xFFFCEBEB), if (active) AuditColors.Teal else AuditColors.Red)
     }
 }
